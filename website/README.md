@@ -38,4 +38,4 @@ This is a small free-tier utility, not an unrestricted public download service. 
 
 No video library or extraction history is persisted. Data passes through bounded subprocesses and browser memory; platform request logs can still exist. Initial URLs, redirect DNS resolutions and outgoing socket IPs are checked in disposable workers; private/local/link-local IPs are denied. Capabilities are signed, not encrypted: they are not a place for credentials. Cookies and user credentials are not supported.
 
-The API has no durable public rate limiter. Vercel Firewall rate limits should be enabled before broad public promotion. Free Hobby allowances do not guarantee unlimited availability; do not upgrade billing or buy services to compensate without approval.
+The live Vercel project has an active Firewall rule limiting /api/index to 90 requests per minute per IP. This external setting is not automatically copied when creating another project. The Python API itself has no durable distributed limiter. Free Hobby allowances do not guarantee unlimited availability; do not upgrade billing or buy services to compensate without approval.

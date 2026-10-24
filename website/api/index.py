@@ -26,7 +26,7 @@ async def isolated(args, timeout=40):
         out, _ = await asyncio.wait_for(proc.communicate(json.dumps(args).encode()), timeout)
         result = json.loads(out)
         if proc.returncode or 'error' in result:
-            raise ValueError('Source unavailable')
+            raise ValueError(result.get('error', 'source_unavailable'))
         return result
     finally:
         if proc.returncode is None:
@@ -114,5 +114,9 @@ async def api(request: Request):
         raise ValueError('Unknown action')
     except RuntimeError:
         return JSONResponse({'error': 'საიტის პარამეტრი აკლია. ადმინისტრატორმა უნდა დაამატოს DOWNLOAD_SECRET.'}, status_code=503)
-    except (ValueError, KeyError, TypeError, OSError, asyncio.TimeoutError):
-        return JSONResponse({'error': 'ვიდეო მიუწვდომელია ან საიტმა მოთხოვნა დაბლოკა. სცადე სხვა საჯარო ბმული. თუ ჩამოტვირთვა დაიწყო, ხელახლა შეამოწმე ბმული.'}, status_code=422)
+    except (ValueError, KeyError, TypeError, OSError, asyncio.TimeoutError) as exc:
+        messages = {
+            'provider_blocked': 'პლატფორმამ ჰოსტინგის მოთხოვნა დაბლოკა ან ავტორიზაციას ითხოვს. ეს ვიდეო ამ სერვერიდან მიუწვდომელია. სცადე სხვა საჯარო ბმული.',
+            'javascript_required': 'ამ ვიდეოსთვის საჭირო დამუშავება ჰოსტინგზე მიუწვდომელია. სცადე სხვა ვიდეო ან პლატფორმა.'
+        }
+        return JSONResponse({'error': messages.get(str(exc), 'ვიდეო მიუწვდომელია ან საიტმა მოთხოვნა დაბლოკა. სცადე სხვა საჯარო ბმული. თუ ჩამოტვირთვა დაიწყო, ხელახლა შეამოწმე ბმული.')}, status_code=422)

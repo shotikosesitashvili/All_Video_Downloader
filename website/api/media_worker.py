@@ -94,5 +94,8 @@ if __name__ == '__main__':
         result = inspect(args['url']) if args['action'] == 'inspect' else chunk(args['media'], args['offset'])
         print(json.dumps(result))
     except Exception as exc:
-        print(json.dumps({'error': type(exc).__name__}))
+        text = str(exc).lower()
+        code = ('provider_blocked' if any(x in text for x in ('not a bot', 'confirm you', 'sign in', 'login required', 'http error 403'))
+                else 'javascript_required' if 'javascript' in text else 'source_unavailable')
+        print(json.dumps({'error': code}))
         sys.exit(1)
