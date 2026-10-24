@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ka">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ვიდეო ჩამოტვირთვა</title>
+<style>
+  :root { --bg:#0f1115; --card:#181b22; --line:#2a2f3a; --text:#e8eaf0; --muted:#8b93a5; --accent:#ff4d4d; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,"Segoe UI",sans-serif; min-height:100vh; display:flex; justify-content:center; padding:40px 16px; }
+  main { width:100%; max-width:560px; }
+  h1 { font-size:26px; margin:0 0 6px; }
+  p.sub { color:var(--muted); margin:0 0 24px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:20px; }
+  .row { display:flex; gap:8px; }
+  input[type=text], select { flex:1; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:12px 14px; font-size:15px; outline:none; }
+  input[type=text]:focus, select:focus { border-color:var(--accent); }
+  button { background:var(--accent); color:#fff; border:0; border-radius:10px; padding:12px 18px; font-size:15px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:wait; }
+  #result { display:none; margin-top:20px; }
+  #result img { width:100%; border-radius:10px; display:block; }
+  #title { font-weight:600; margin:12px 0 2px; }
+  #meta { color:var(--muted); font-size:14px; margin-bottom:14px; }
+  .opts { display:flex; gap:8px; margin-bottom:12px; }
+  #dl { width:100%; }
+  #msg { margin-top:14px; font-size:14px; min-height:20px; }
+  .err { color:#ff7b7b; } .ok { color:#6fdc8c; } .info { color:var(--muted); }
+  footer { color:var(--muted); font-size:12px; margin-top:18px; line-height:1.5; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ვიდეო ჩამოტვირთვა</h1>
+  <p class="sub">ჩასვი YouTube ბმული და აირჩიე ფორმატი.</p>
+
+  <div class="card">
+    <div class="row">
+      <input id="url" type="text" placeholder="https://www.youtube.com/watch?v=...">
+      <button id="check">ძებნა</button>
+    </div>
+
+    <div id="result">
+      <img id="thumb" alt="">
+      <div id="title"></div>
+      <div id="meta"></div>
+      <div class="opts">
+        <select id="mode">
+          <option value="video">ვიდეო (MP4)</option>
+          <option value="audio">მხოლოდ აუდიო (MP3)</option>
+        </select>
+        <select id="height"></select>
+      </div>
+      <button id="dl">ჩამოტვირთვა</button>
+    </div>
+
+    <div id="msg"></div>
+  </div>
+
+  <footer>
+    გამოიყენე მხოლოდ იმ ვიდეოებისთვის, რომლებზეც გაქვს უფლება (შენი კონტენტი, Creative Commons და ა.შ.).
+    YouTube-ის წესები და საავტორო უფლებები შენს პასუხისმგებლობაშია.
+  </footer>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let current = null;
+
+async function safeJson(r) {
+  const t = await r.text();
+  try { return JSON.parse(t); }
+  catch {
+    throw new Error("სერვერმა არასწორი პასუხი დააბრუნა. დარწმუნდი, რომ გაშვებულია `python app.py` და გვერდი გახსნილია http://127.0.0.1:5000 მისამართზე (არა ფაილად ან Live Server-ით).");
+  }
+}
+function msg(text, cls) { $("msg").className = cls || ""; $("msg").textContent = text || ""; }
+function fmtDur(s) { if (!s) return ""; const m = Math.floor(s/60), r = s%60; return `${m}:${String(r).padStart(2,"0")}`; }
+
+$("mode").addEventListener("change", () => { $("height").style.display = $("mode").value === "video" ? "" : "none"; });
+
+$("check").addEventListener("click", async () => {
+  const url = $("url").value.trim();
+  if (!url) return;
+  $("check").disabled = true; $("result").style.display = "none"; msg("იძებნება...", "info");
+  try {
+    const r = await fetch("/api/info", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({url}) });
+    const d = await safeJson(r);
+    if (!r.ok) throw new Error(d.error);
+    current = { url, title: d.title };
+    $("thumb").src = d.thumbnail || "";
+    $("title").textContent = d.title;
+    $("meta").textContent = [d.channel, fmtDur(d.duration)].filter(Boolean).join(" · ");
+    const hs = d.heights.length ? d.heights : [720];
+    $("height").innerHTML = hs.map(h => `<option value="${h}">${h}p</option>`).join("");
+    const noVideo = !d.heights.length;
+    $("mode").querySelector('option[value="video"]').disabled = noVideo;
+    if (noVideo) { $("mode").value = "audio"; $("mode").dispatchEvent(new Event("change")); }
+    $("result").style.display = "block";
+    msg(noVideo ? "ვიდეოს ხმასთან გასაერთიანებლად ffmpeg არ არის დაყენებული, ამიტომ ამ ვიდეოსთვის მხოლოდ აუდიოა ხელმისაწვდომი." : "", "info");
+  } catch (e) { msg(e.message, "err"); }
+  $("check").disabled = false;
+});
+
+$("dl").addEventListener("click", async () => {
+  if (!current) return;
+  $("dl").disabled = true; msg("მიმდინარეობს ჩამოტვირთვა, დაელოდე...", "info");
+  try {
+    const r = await fetch("/api/download", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ url: current.url, mode: $("mode").value, height: $("height").value })
+    });
+    if (!r.ok) { const d = await safeJson(r); throw new Error(d.error); }
+    const blob = await r.blob();
+    const cd = r.headers.get("Content-Disposition") || "";
+    const m = cd.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+    const name = m ? decodeURIComponent(m[1]) : (current.title || "video") + ($("mode").value === "audio" ? ".mp3" : ".mp4");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    URL.revokeObjectURL(a.href);
+    msg("მზადაა ✓", "ok");
+  } catch (e) { msg(e.message, "err"); }
+  $("dl").disabled = false;
+});
+
+$("url").addEventListener("keydown", e => { if (e.key === "Enter") $("check").click(); });
+</script>
+</body>
+</html>
