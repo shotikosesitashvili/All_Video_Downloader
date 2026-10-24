@@ -25,7 +25,16 @@ class handler(BaseHTTPRequestHandler):
                 "firstChunkBytes": len(base64.b64decode(sample["data"])),
             }
         except Exception as exc:
-            result = {"ok": False, "errorType": type(exc).__name__}
+            text = str(exc).lower()
+            if any(word in text for word in ("login required", "sign in", "confirm you", "not a bot")):
+                code = "provider_blocked"
+            elif "javascript" in text:
+                code = "javascript_required"
+            elif "403" in text:
+                code = "http_403"
+            else:
+                code = "source_unavailable"
+            result = {"ok": False, "errorType": type(exc).__name__, "code": code}
         body = json.dumps(result).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
