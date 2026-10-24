@@ -1,3 +1,7 @@
+# All Video Downloader
+
+**ახალი: ვებსაიტი Vercel-ისთვის** — ქართული ინტერფეისი, ხარისხის არჩევა, MP3 და ბრაუზერში დამუშავება. კოდი არის [website/](website/)-ში. Vercel-ზე Root Directory მიუთითე `website`. [საიტის ინსტრუქცია](website/README.md).
+
 # All Video Downloader — Telegram ბოტი
 
 ქართული Telegram ბოტი YouTube, TikTok, Facebook, Instagram და yt-dlp-ის მიერ მხარდაჭერილი სხვა საიტებისთვის.

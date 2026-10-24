@@ -1,0 +1,4 @@
+fastapi>=0.117,<1
+yt-dlp[default]>=2026.10.21
+requests>=2.32,<3
+uvicorn>=0.35,<1
