@@ -16,6 +16,43 @@ class SecurityTests(unittest.TestCase):
         self.env.start()
     def tearDown(self):
         self.env.stop()
+    def test_session_cookies_are_encrypted(self):
+        import base64
+        cookies = [{'name': 'tt_chain_token', 'value': 'test-private-cookie',
+                    'domain': '.tiktok.com', 'path': '/', 'secure': True, 'expires': None}]
+        token = security.sign({'url': 'https://media.tiktok.com/video', 'cookies': cookies})
+        self.assertTrue(token.startswith('v2.'))
+        decoded = base64.urlsafe_b64decode(token[3:] + '=' * (-len(token[3:]) % 4))
+        self.assertNotIn(b'test-private-cookie', decoded)
+        self.assertEqual(security.verify(token)['cookies'], cookies)
+
+    def test_cookie_scope_preserved(self):
+        import requests
+        session = requests.Session()
+        session.trust_env = False
+        security.restore_cookies(session, [{'name': 'tt_chain_token', 'value': 'sample',
+            'domain': '.tiktok.com', 'path': '/', 'secure': True, 'expires': None}])
+        for url, expected in [('https://v16-webapp-prime.tiktok.com/video', True),
+                              ('https://example.com/video', False),
+                              ('http://v16-webapp-prime.tiktok.com/video', False)]:
+            prepared = session.prepare_request(requests.Request('GET', url))
+            self.assertEqual('tt_chain_token=sample' in prepared.headers.get('Cookie', ''), expected)
+
+    def test_cookies_survive_quality_selection(self):
+        fmt = dict(id='720',url='https://media.tiktok.com/video',headers={},height=720,size=123,
+                   ext='mp4',video=True,audio=True,vcodec='avc1',fps=30,abr=128,
+                   cookies=[{'name': 'tt_chain_token', 'value': 'sample', 'domain': '.tiktok.com'}])
+        info = {'title': 'Title', 'source': 'TikTok', 'duration': 12, 'formats': [fmt]}
+        payload = security.verify(summarize(info)['options'][0]['video']['token'])
+        self.assertEqual(payload['cookies'], fmt['cookies'])
+
+    def test_existing_signed_menu_still_verifies(self):
+        import base64, hashlib, hmac, json
+        payload = {'url': 'https://example.com/video', 'exp': int(time.time()) + 60}
+        raw = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip('=')
+        sig = hmac.new(security.secret(), raw.encode(), hashlib.sha256).hexdigest()
+        self.assertEqual(security.verify(raw + '.' + sig)['url'], payload['url'])
+
     def test_signed_roundtrip(self):
         self.assertEqual(security.verify(security.sign({'url':'https://example.com/a'}))['url'], 'https://example.com/a')
     def test_tamper_rejected(self):
@@ -83,3 +120,4 @@ class APITests(unittest.IsolatedAsyncioTestCase):
                 r=await self.request('chunk',{'token':token,'offset':1})
                 worker.assert_not_called()
         self.assertEqual(r.status_code,422)
+

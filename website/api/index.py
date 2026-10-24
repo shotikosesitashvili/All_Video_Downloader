@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import json
+import logging
 import os
 import signal
 import sys
@@ -41,7 +42,7 @@ async def isolated(args, timeout=40):
 
 
 def media_option(f):
-    return {'token': sign({'url': f['url'], 'headers': f['headers']}),
+    return {'token': sign({'url': f['url'], 'headers': f['headers'], 'cookies': f.get('cookies') or []}),
             'ext': f['ext'], 'size': f['size'], 'video': f['video'], 'audio': f['audio'],
             'height': f['height'], 'vcodec': f['vcodec']}
 
@@ -117,6 +118,11 @@ async def api(request: Request):
     except (ValueError, KeyError, TypeError, OSError, asyncio.TimeoutError) as exc:
         messages = {
             'provider_blocked': 'პლატფორმამ ჰოსტინგის მოთხოვნა დაბლოკა ან ავტორიზაციას ითხოვს. ეს ვიდეო ამ სერვერიდან მიუწვდომელია. სცადე სხვა საჯარო ბმული.',
+            'expired_token': 'ბმულის ვადა ამოიწურა. ვიდეოს ბმული ხელახლა შეამოწმე და ჩამოტვირთე.',
             'javascript_required': 'ამ ვიდეოსთვის საჭირო დამუშავება ჰოსტინგზე მიუწვდომელია. სცადე სხვა ვიდეო ან პლატფორმა.'
         }
+        code = str(exc) if str(exc) in messages else 'source_unavailable'
+        action = request.query_params.get('action')
+        logging.warning('media_request_failed action=%s code=%s', action if action in {'inspect', 'chunk'} else 'unknown', code)
         return JSONResponse({'error': messages.get(str(exc), 'ვიდეო მიუწვდომელია ან საიტმა მოთხოვნა დაბლოკა. სცადე სხვა საჯარო ბმული. თუ ჩამოტვირთვა დაიწყო, ხელახლა შეამოწმე ბმული.')}, status_code=422)
+

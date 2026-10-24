@@ -5,7 +5,7 @@ import re
 import shutil
 import sys
 from pathlib import Path
-from security import CHUNK, MAX_MEDIA, guard_network, public_url
+from security import CHUNK, MAX_MEDIA, guard_network, public_url, cookie_records, restore_cookies
 
 guard_network()
 
@@ -39,6 +39,7 @@ def inspect(url):
         headers = dict(info.get('http_headers') or {}, **(f.get('http_headers') or {}))
         headers = {k: str(v) for k, v in headers.items() if k.lower() in {'user-agent', 'referer', 'origin'}}
         formats.append({'id': str(f['format_id']), 'url': f['url'], 'headers': headers,
+            'cookies': cookie_records(ydl.cookiejar, f['url']),
             'height': f.get('height'), 'size': f.get('filesize') or f.get('filesize_approx'),
             'ext': f.get('ext', 'bin'), 'video': f.get('vcodec') != 'none' and f.get('ext') not in {'mp3', 'm4a', 'ogg', 'opus', 'wav'},
             'audio': f.get('acodec') != 'none', 'vcodec': f.get('vcodec') or '',
@@ -58,6 +59,7 @@ def chunk(payload, offset):
     headers.update({'Range': f'bytes={offset}-{offset + CHUNK - 1}', 'Accept-Encoding': 'identity'})
     with requests.Session() as session:
         session.trust_env = False
+        restore_cookies(session, payload.get('cookies') or [])
         with session.get(url, headers=headers, stream=True, timeout=(8, 20), allow_redirects=True) as response:
             if response.status_code == 416:
                 return {'done': True, 'data': '', 'total': offset}
@@ -94,7 +96,8 @@ if __name__ == '__main__':
         print(json.dumps(result))
     except Exception as exc:
         text = str(exc).lower()
-        code = ('provider_blocked' if any(x in text for x in ('not a bot', 'confirm you', 'sign in', 'login required', 'http error 403'))
+        code = ('provider_blocked' if any(x in text for x in ('not a bot', 'confirm you', 'sign in', 'login required', 'http error 403', '403 client error'))
                 else 'javascript_required' if 'javascript' in text else 'source_unavailable')
         print(json.dumps({'error': code}))
         sys.exit(1)
+

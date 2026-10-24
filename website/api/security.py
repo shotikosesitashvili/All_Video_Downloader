@@ -7,6 +7,7 @@ import os
 import socket
 import time
 from urllib.parse import urlsplit
+from Cryptodome.Cipher import AES
 
 CHUNK = 2 * 1024 * 1024
 MAX_MEDIA = 64 * 1024 * 1024
@@ -31,24 +32,49 @@ def secret():
     return key.encode()
 
 
+def encryption_key():
+    return hashlib.sha256(b'clipstack-capability-v2\x00' + secret()).digest()
+
+
 def sign(payload):
     payload = dict(payload, exp=int(time.time()) + 1200)
-    raw = base64.urlsafe_b64encode(json.dumps(payload, separators=(',', ':')).encode()).decode().rstrip('=')
-    sig = hmac.new(secret(), raw.encode(), hashlib.sha256).hexdigest()
-    return raw + '.' + sig
+    nonce = os.urandom(12)
+    cipher = AES.new(encryption_key(), AES.MODE_GCM, nonce=nonce)
+    ciphertext, tag = cipher.encrypt_and_digest(json.dumps(payload, separators=(',', ':')).encode())
+    return 'v2.' + base64.urlsafe_b64encode(nonce + tag + ciphertext).decode().rstrip('=')
 
 
 def verify(token):
     if not isinstance(token, str) or len(token) > 32000:
         raise ValueError('Invalid token')
-    raw, sig = token.rsplit('.', 1)
-    expected = hmac.new(secret(), raw.encode(), hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(sig, expected):
-        raise ValueError('Invalid signature')
-    payload = json.loads(base64.urlsafe_b64decode(raw + '=' * (-len(raw) % 4)))
+    if token.startswith('v2.'):
+        raw = token[3:]
+        sealed = base64.urlsafe_b64decode(raw + '=' * (-len(raw) % 4))
+        if len(sealed) < 29 or base64.urlsafe_b64encode(sealed).decode().rstrip('=') != raw:
+            raise ValueError('Invalid token')
+        cipher = AES.new(encryption_key(), AES.MODE_GCM, nonce=sealed[:12])
+        payload = json.loads(cipher.decrypt_and_verify(sealed[28:], sealed[12:28]))
+    else:
+        raw, sig = token.rsplit('.', 1)
+        expected = hmac.new(secret(), raw.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            raise ValueError('Invalid signature')
+        payload = json.loads(base64.urlsafe_b64decode(raw + '=' * (-len(raw) % 4)))
     if payload['exp'] <= time.time():
-        raise ValueError('Expired token')
+        raise ValueError('expired_token')
     return payload
+
+
+def cookie_records(jar, url):
+    return [{'name': c.name, 'value': c.value, 'domain': c.domain, 'path': c.path,
+             'secure': c.secure, 'expires': c.expires}
+            for c in jar.get_cookies_for_url(url)]
+
+
+def restore_cookies(session, cookies):
+    for c in cookies:
+        session.cookies.set(c['name'], c['value'], domain=c['domain'], path=c.get('path') or '/',
+                            secure=bool(c.get('secure')), expires=c.get('expires'))
 
 
 def guard_network():
@@ -80,3 +106,4 @@ def guard_network():
     socket.socket.connect_ex = connect_ex
     for key in ('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy'):
         os.environ.pop(key, None)
+
