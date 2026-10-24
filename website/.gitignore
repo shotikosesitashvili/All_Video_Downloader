@@ -1,8 +1,0 @@
-node_modules/
-dist/
-public/ffmpeg/
-.env
-.env.local
-.vercel/
-__pycache__/
-*.pyc

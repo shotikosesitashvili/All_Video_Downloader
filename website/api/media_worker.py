@@ -1,4 +1,3 @@
-"""Limited extraction or a bounded byte-range fetch, isolated from the API process."""
 import base64
 import json
 import os

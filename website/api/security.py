@@ -1,4 +1,3 @@
-"""Signed, short-lived media capabilities; no arbitrary proxy URLs."""
 import base64
 import hashlib
 import hmac
@@ -53,7 +52,6 @@ def verify(token):
 
 
 def guard_network():
-    # Applied only inside disposable processes, including DNS, redirects and literal IPs.
     original_dns = socket.getaddrinfo
     original_connect = socket.socket.connect
     original_connect_ex = socket.socket.connect_ex
@@ -70,7 +68,6 @@ def guard_network():
 
     def connect(sock, address):
         if isinstance(address, tuple):
-            # All networking clients resolve before connect. Reject unresolved destinations.
             check(address)
         return original_connect(sock, address)
 
