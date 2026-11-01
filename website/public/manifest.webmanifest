@@ -1,0 +1,24 @@
+{
+  "name": "Clipstack — შენი ვიდეო. შენთან.",
+  "short_name": "Clipstack",
+  "description": "ვიდეოს ჩამოტვირთვა ბმულით — ხარისხის არჩევა და MP3 აუდიო.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101612",
+  "theme_color": "#101612",
+  "icons": [
+    {
+      "src": "/icons/clipstack.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/clipstack.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
