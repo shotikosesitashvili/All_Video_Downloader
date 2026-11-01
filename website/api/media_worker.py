@@ -12,21 +12,49 @@ guard_network()
 
 def inspect(url):
     from yt_dlp import YoutubeDL
+
     class Quiet:
         def debug(self, msg): pass
         def warning(self, msg): pass
         def error(self, msg): pass
+
     node = shutil.which('node')
     if not node and Path('/nodejs/bin/node').is_file():
         node = '/nodejs/bin/node'
-    opts = dict(quiet=True, logger=Quiet(), cachedir=False, noplaylist=True,
-                extract_flat='in_playlist', playlistend=1, socket_timeout=12,
-                retries=1, skip_download=True, proxy='',
-                js_runtimes={'node': {'path': node}} if node else {})
-    with YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(public_url(url), download=False)
-    if not info or info.get('_type') in {'playlist', 'multi_video'} or info.get('is_live'):
+
+    opts = dict(
+        quiet=True, logger=Quiet(), cachedir=False, noplaylist=True,
+        extract_flat='in_playlist', playlistend=1, socket_timeout=12,
+        retries=1, skip_download=True, proxy='',
+        js_runtimes={'node': {'path': node}} if node else {},
+        remote_components={'ejs:github'},
+    )
+
+    # Try yt-dlp's current defaults first. If YouTube rejects those clients,
+    # retry with clients that can provide public formats without account cookies.
+    last_error = None
+    info = None
+    for clients in (None, ['android_vr', 'web_embedded']):
+        attempt_opts = dict(opts)
+        if clients:
+            attempt_opts['extractor_args'] = {
+                'youtube': {'player_client': clients}
+            }
+        try:
+            with YoutubeDL(attempt_opts) as ydl:
+                info = ydl.extract_info(public_url(url), download=False)
+            if info and info.get('formats'):
+                break
+        except Exception as exc:
+            last_error = exc
+    if not info or not info.get('formats'):
+        if last_error:
+            raise last_error
+        raise ValueError('No formats available')
+
+    if info.get('_type') in {'playlist', 'multi_video'} or info.get('is_live'):
         raise ValueError('Single public video required')
+
     formats = []
     for f in info.get('formats', []):
         if (f.get('protocol') not in {'http', 'https'} or f.get('has_drm')
@@ -66,7 +94,7 @@ def chunk(payload, offset):
             response.raise_for_status()
             total = None
             if response.status_code == 206:
-                match = re.fullmatch(r'bytes (\d+)-(\d+)/(\d+|\*)', response.headers.get('Content-Range', ''))
+                match = re.fullmatch(r'bytes (\\d+)-(\\d+)/(\\d+|\\*)', response.headers.get('Content-Range', ''))
                 if not match or int(match[1]) != offset or int(match[2]) >= offset + CHUNK:
                     raise ValueError('Bad byte range from source')
                 if match[3] != '*':
@@ -100,4 +128,3 @@ if __name__ == '__main__':
                 else 'javascript_required' if 'javascript' in text else 'source_unavailable')
         print(json.dumps({'error': code}))
         sys.exit(1)
-
